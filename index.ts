@@ -6,7 +6,8 @@ import {
   OfflineDirectSigner,
 } from "@cosmjs/proto-signing";
 import { MsgDepositForBurn } from "./cctpProto";
-import { fromHex } from "viem";
+//import { fromHex } from "viem";
+import axios from "axios";
 
 const mnemonic = process.env.MNEMONIC!;
 if (!mnemonic)
@@ -26,25 +27,17 @@ const runAll = async (): Promise<void> => {
     signer
   );
 
-  signingClient.registry.register(
-    "/circle.cctp.v1.MsgDepositForBurn",
-    MsgDepositForBurn
-  );
-
   const squidtesting = (await signer.getAccounts())[0].address;
   console.log("Squid test address address from signer", squidtesting);
-
-  // Check the balance of Alice and the Faucet
   console.log(
     "Squidtest balance before:",
     await client.getAllBalances(squidtesting)
   );
 
-  //encode recipient address
-  const bz = fromHex("0xb13CD07B22BC5A69F8500a1Cb3A1b65618d50B22", "bytes");
-  const padded = new Uint8Array(32);
-  padded.set(bz, 12);
-
+  signingClient.registry.register(
+    "/circle.cctp.v1.MsgDepositForBurn",
+    MsgDepositForBurn
+  );
   interface Msg {
     typeUrl: string;
     value: {
@@ -56,19 +49,41 @@ const runAll = async (): Promise<void> => {
     };
   }
 
-  const jsonString =
-    '{"typeUrl":"/circle.cctp.v1.MsgDepositForBurn","value":{"from":"noble1zqnudqmjrgh9m3ec9yztkrn4ttx7ys64p87kkx","amount":"100000","destinationDomain":0,"mintRecipient":"AAAAAAAAAAAAAAAAsTzQeyK8Wmn4UAocs6G2VhjVCyI=","burnToken":"uusdc"}}';
+  const headers = {
+    "x-integrator-id": "Squid-team",
+    "Content-Type": "application/json",
+  };
 
-  const parsedObject: Msg = JSON.parse(jsonString);
+  const data = {
+    fromChain: "noble-1",
+    fromToken: "uusdc",
+    fromAddress: "noble1zqnudqmjrgh9m3ec9yztkrn4ttx7ys64p87kkx",
+    fromAmount: "100000",
+    toChain: "1",
+    toToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    toAddress: "0xb13CD07B22BC5A69F8500a1Cb3A1b65618d50B22",
+    quoteOnly: false,
+    slippage: 1,
+    slippageConfig: {
+      autoMode: 1,
+    },
+    enableBoost: true,
+  };
 
-  // create transfer object which is an ibctranser
-  //   const msg: MsgDepositForBurn = {
-  //     from: "noble1zqnudqmjrgh9m3ec9yztkrn4ttx7ys64p87kkx",
-  //     amount: "10000",
-  //     destinationDomain: 1,
-  //     mintRecipient: padded,
-  //     burnToken: "uusdc",
-  //   };
+  let responseData;
+  await axios
+    .post("https://v2.api.squidrouter.com/v2/route", data, { headers })
+    .then((response) => {
+      console.log(response.data);
+      responseData = response.data;
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+    });
+
+  const parsedObject: Msg = JSON.parse(
+    responseData.route.transactionRequest.data
+  );
 
   const result = await signingClient.signAndBroadcast(
     // signerAddress
